@@ -1,12 +1,56 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useState} from "react";
+import { router, useLocalSearchParams,useFocusEffect } from "expo-router";
+import {getChildTotalXP,calculateLevel, getLevelProgress,} from "../../services/progressService";
 
 export default function ChildDashboard() {
-  const { childId, childName } = useLocalSearchParams<{
-    childId: string;
-    childName: string;
-  }>();
+  const { childId, childName } = useLocalSearchParams<{ childId: string; childName: string}>();
+
+  const [totalXP, setTotalXP] = useState(0);
+  const [level, setLevel] = useState(1);
+const [levelProgress, setLevelProgress] = useState(0);
+const [xpToNextLevel, setXpToNextLevel] = useState(100);
+
+  useFocusEffect(
+  useCallback(() => {
+    loadXP();
+  }, [childId])
+);
+
+ const loadXP = async () => {
+  try {
+    if (!childId) {
+      return;
+    }
+
+    const xp =
+      await getChildTotalXP(
+        childId
+      );
+
+    const levelData =
+      getLevelProgress(xp);
+
+    setTotalXP(xp);
+
+    setLevel(
+      levelData.level
+    );
+
+    setLevelProgress(
+      levelData.progress
+    );
+
+    setXpToNextLevel(
+      levelData.nextLevelXP - xp
+    );
+  } catch (error) {
+    console.log(
+      "XP ERROR:",
+      error
+    );
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -17,10 +61,58 @@ export default function ChildDashboard() {
       <Text style={styles.name}>{childName} ⭐</Text>
 
       <View style={styles.xpCard}>
-        <Text style={styles.level}>Level 1</Text>
 
-        <Text style={styles.xp}>0 / 100 XP</Text>
-      </View>
+  <View style={styles.xpHeader}>
+    <View>
+      <Text style={styles.levelLabel}>
+        CURRENT LEVEL
+      </Text>
+
+      <Text style={styles.level}>
+        Level {level} 🌟
+      </Text>
+    </View>
+
+    <Text style={styles.levelEmoji}>
+      🏆
+    </Text>
+  </View>
+
+  <View style={styles.xpRow}>
+    <Text style={styles.xp}>
+      ⭐ {totalXP} XP
+    </Text>
+
+    <Text style={styles.nextLevel}>
+      {xpToNextLevel > 0
+        ? `${xpToNextLevel} XP to Level ${
+            level + 1
+          }`
+        : "Level Up! 🎉"}
+    </Text>
+  </View>
+
+  <View style={styles.xpProgressBackground}>
+    <View
+      style={[
+        styles.xpProgressFill,
+        {
+          width: `${Math.min(
+            levelProgress * 100,
+            100
+          )}%`,
+        },
+      ]}
+    />
+  </View>
+
+  <Text style={styles.progressLabel}>
+    {Math.round(
+      levelProgress * 100
+    )}% complete
+  </Text>
+
+</View>
 
       <Text style={styles.question}>What do you want to learn?</Text>
 
@@ -165,4 +257,54 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
   },
+  xpHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+
+levelLabel: {
+  color: "rgba(255,255,255,0.75)",
+  fontSize: 12,
+  fontWeight: "800",
+  letterSpacing: 1,
+},
+
+levelEmoji: {
+  fontSize: 40,
+},
+
+xpRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginTop: 15,
+},
+
+nextLevel: {
+  color: "rgba(255,255,255,0.85)",
+  fontSize: 12,
+  fontWeight: "600",
+},
+
+xpProgressBackground: {
+  height: 14,
+  backgroundColor: "rgba(255,255,255,0.25)",
+  borderRadius: 20,
+  overflow: "hidden",
+  marginTop: 15,
+},
+
+xpProgressFill: {
+  height: "100%",
+  backgroundColor: "#FFFFFF",
+  borderRadius: 20,
+},
+
+progressLabel: {
+  color: "rgba(255,255,255,0.75)",
+  fontSize: 12,
+  marginTop: 7,
+  textAlign: "right",
+},
 });

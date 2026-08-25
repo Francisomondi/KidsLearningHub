@@ -170,56 +170,45 @@ export default function LessonScreen() {
 
 
 const handleNext = async () => {
-  if (
-    currentQuestion <
-    questions.length - 1
-  ) {
-    setCurrentQuestion(
-      (previous) =>
-        previous + 1
-    );
-
+  // More questions remaining
+  if (currentQuestion < questions.length - 1) {
+    setCurrentQuestion((previous) => previous + 1);
     setSelectedAnswer(null);
     setAnswered(false);
-
     return;
   }
 
   // -----------------------------
-  // Lesson completed
+  // LAST QUESTION
   // -----------------------------
 
-  const finalScore = score;
+  if (!childId || !lessonId) {
+    console.log("Missing childId or lessonId");
+    return;
+  }
 
   try {
     setSavingProgress(true);
 
-    if (!childId || !lessonId) {
-      throw new Error(
-        "Child ID or Lesson ID is missing."
-      );
-    }
-
+    // Save the current score
     await saveLessonProgress(
       childId,
       lessonId,
-      finalScore
+      score
     );
 
+    // Show completion screen
     setLessonComplete(true);
     setShowFeedback(true);
 
     feedbackScale.setValue(0);
 
-    Animated.spring(
-      feedbackScale,
-      {
-        toValue: 1,
-        friction: 5,
-        tension: 80,
-        useNativeDriver: true,
-      }
-    ).start();
+    Animated.spring(feedbackScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
   } catch (error) {
     console.log(
       "SAVE PROGRESS ERROR:",
@@ -566,6 +555,7 @@ const handleNext = async () => {
                       : "#FF9800",
                 },
               ]}
+              disabled={savingProgress}
               onPress={() => {
                 if (savingProgress) {
                   return;
@@ -575,13 +565,16 @@ const handleNext = async () => {
 
                 if (lessonComplete) {
                   router.replace({
-                    pathname:
-                      "/child/dashboard",
+                    pathname: "/child/dashboard",
                     params: {
                       childId,
                     },
                   });
+
+                  return;
                 }
+
+                handleNext();
               }}
             >
 
