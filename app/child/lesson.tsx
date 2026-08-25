@@ -1,6 +1,6 @@
-import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { router,  useLocalSearchParams} from "expo-router";
-import { useEffect,  useRef,  useState} from "react";
+import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View} from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import { getLessonQuestions } from "../../services/lessonsService";
 import { saveLessonProgress } from "../../services/progressService";
 
@@ -12,11 +12,19 @@ type Question = {
 };
 
 export default function LessonScreen() {
-  const {  childId,  lessonId} = useLocalSearchParams<{
-    childId: string;
-    lessonId: string;
-  }>();
+  // =====================================
+  // ROUTE PARAMETERS
+  // =====================================
 
+  const { childId, lessonId } =
+    useLocalSearchParams<{
+      childId: string;
+      lessonId: string;
+    }>();
+
+  // =====================================
+  // STATE
+  // =====================================
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,13 +38,22 @@ export default function LessonScreen() {
   const [savingProgress, setSavingProgress] = useState(false);
   const [xpAwarded, setXpAwarded] = useState(0);
 
- 
+  // =====================================
+  // ANIMATION
+  // =====================================
 
-  const feedbackScale = useRef( new Animated.Value(0)).current;
+  const feedbackScale =
+    useRef(
+      new Animated.Value(0)
+    ).current;
 
+  // =====================================
+  // LOAD QUESTIONS
+  // =====================================
 
-  useEffect(() => { loadQuestions();
-}, [lessonId]);
+  useEffect(() => {
+    loadQuestions();
+  }, [lessonId]);
 
   const loadQuestions = async () => {
     try {
@@ -70,7 +87,9 @@ export default function LessonScreen() {
     }
   };
 
-  
+  // =====================================
+  // LOADING SCREEN
+  // =====================================
 
   if (loading) {
     return (
@@ -95,7 +114,9 @@ export default function LessonScreen() {
     );
   }
 
-
+  // =====================================
+  // NO QUESTIONS
+  // =====================================
 
   if (questions.length === 0) {
     return (
@@ -115,6 +136,7 @@ export default function LessonScreen() {
 
         <TouchableOpacity
           style={styles.backButton}
+          activeOpacity={0.8}
           onPress={() => router.back()}
         >
           <Text style={styles.buttonText}>
@@ -125,17 +147,22 @@ export default function LessonScreen() {
     );
   }
 
- 
+  // =====================================
+  // CURRENT QUESTION
+  // =====================================
 
   const question =
     questions[currentQuestion];
 
-
+  // =====================================
+  // ANSWER QUESTION
+  // =====================================
 
   const handleAnswer = (
     answer: string
   ) => {
-    if (answered) {
+    // Prevent answering twice
+    if (answered || lessonComplete) {
       return;
     }
 
@@ -144,10 +171,14 @@ export default function LessonScreen() {
       question.correct_answer;
 
     setSelectedAnswer(answer);
+
     setAnswered(true);
+
     setIsCorrect(correct);
+
     setShowFeedback(true);
 
+    // Add XP immediately to visible score
     if (correct) {
       setScore(
         (previous) =>
@@ -155,110 +186,191 @@ export default function LessonScreen() {
       );
     }
 
-    // Start popup animation
+    // =================================
+    // START POPUP ANIMATION
+    // =================================
+
     feedbackScale.setValue(0);
 
     Animated.spring(
       feedbackScale,
       {
         toValue: 1,
+
         friction: 5,
+
         tension: 80,
+
         useNativeDriver: true,
       }
     ).start();
   };
 
+  // =====================================
+  // NEXT QUESTION / FINISH LESSON
+  // =====================================
 
-const handleNext = async () => {
-  // ---------------------------------
-  // More questions
-  // ---------------------------------
+  const handleNext = async () => {
+    // Prevent duplicate saves
+    if (savingProgress) {
+      return;
+    }
 
-  if (
-    currentQuestion <
-    questions.length - 1
-  ) {
-    setCurrentQuestion(
-      (previous) =>
-        previous + 1
-    );
+    // =================================
+    // MORE QUESTIONS
+    // =================================
 
-    setSelectedAnswer(null);
+    if (
+      currentQuestion <
+      questions.length - 1
+    ) {
+      setShowFeedback(false);
 
-    setAnswered(false);
-
-    return;
-  }
-
-  // ---------------------------------
-  // Final question
-  // ---------------------------------
-
-  if (!childId || !lessonId) {
-    console.log(
-      "Missing childId or lessonId"
-    );
-
-    return;
-  }
-
-  try {
-    setSavingProgress(true);
-
-    const result =
-      await saveLessonProgress(
-        childId,
-        lessonId,
-        score
+      setCurrentQuestion(
+        (previous) =>
+          previous + 1
       );
+
+      setSelectedAnswer(null);
+
+      setAnswered(false);
+
+      setIsCorrect(false);
+
+      // Small animation reset
+      feedbackScale.setValue(0);
+
+      return;
+    }
+
+    // =================================
+    // FINAL QUESTION
+    // =================================
+
+    if (!childId || !lessonId) {
+      console.log(
+        "Missing childId or lessonId"
+      );
+
+      return;
+    }
+
+    try {
+      setSavingProgress(true);
+
+      // IMPORTANT:
+      // score state may not yet contain
+      // the final question's +10 XP.
+      //
+      // Therefore calculate the final
+      // score manually.
+
+      const finalScore =
+        score +
+        (selectedAnswer ===
+        question.correct_answer
+          ? 10
+          : 0);
+
+      console.log(
+        "FINAL SCORE:",
+        finalScore
+      );
+
+      // =================================
+      // SAVE TO SUPABASE
+      // =================================
+
+      const result =
+        await saveLessonProgress(
+          childId,
+          lessonId,
+          finalScore
+        );
+
+      console.log(
+        "LESSON PROGRESS:",
+        result
+      );
+
+      // =================================
+      // SAVE XP AWARDED
+      // =================================
 
       setXpAwarded(
         result.xpAwarded
       );
 
-    console.log(
-      "LESSON PROGRESS:",
-      result
-    );
+      // =================================
+      // MARK LESSON COMPLETE
+      // =================================
 
-    setLessonComplete(true);
+      setLessonComplete(true);
 
-    setShowFeedback(true);
+      setShowFeedback(true);
 
-    feedbackScale.setValue(0);
+      // =================================
+      // COMPLETION ANIMATION
+      // =================================
 
-    Animated.spring(
-      feedbackScale,
-      {
-        toValue: 1,
-        friction: 5,
-        tension: 80,
-        useNativeDriver: true,
-      }
-    ).start();
+      feedbackScale.setValue(0);
 
-  } catch (error) {
-    console.log(
-      "SAVE PROGRESS ERROR:",
-      error
-    );
+      Animated.spring(
+        feedbackScale,
+        {
+          toValue: 1,
 
-  } finally {
-    setSavingProgress(false);
-  }
-};
+          friction: 5,
 
+          tension: 80,
+
+          useNativeDriver: true,
+        }
+      ).start();
+    } catch (error) {
+      console.log(
+        "SAVE PROGRESS ERROR:",
+        error
+      );
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+
+  // =====================================
+  // RETURN TO DASHBOARD
+  // =====================================
+
+  const goToDashboard = () => {
+    if (!childId) {
+      router.replace(
+        "/child/dashboard"
+      );
+
+      return;
+    }
+
+    router.replace({
+      pathname:
+        "/child/dashboard",
+
+      params: {
+        childId,
+      },
+    });
+  };
+
+  // =====================================
+  // MAIN SCREEN
+  // =====================================
 
   return (
     <View style={styles.container}>
-
-      {/* =========================
+      {/* =================================
           HEADER
-      ========================== */}
+      ================================= */}
 
       <View style={styles.header}>
-
         <Text
           style={
             styles.progressText
@@ -274,17 +386,18 @@ const handleNext = async () => {
           style={styles.xpBadge}
         >
           <Text
-            style={styles.xpBadgeText}
+            style={
+              styles.xpBadgeText
+            }
           >
             ⭐ {score} XP
           </Text>
         </View>
-
       </View>
 
-      {/* =========================
+      {/* =================================
           PROGRESS BAR
-      ========================== */}
+      ================================= */}
 
       <View
         style={
@@ -294,6 +407,7 @@ const handleNext = async () => {
         <View
           style={[
             styles.progressFill,
+
             {
               width: `${
                 ((currentQuestion +
@@ -306,16 +420,15 @@ const handleNext = async () => {
         />
       </View>
 
-      {/* =========================
+      {/* =================================
           QUESTION CARD
-      ========================== */}
+      ================================= */}
 
       <View
         style={
           styles.questionCard
         }
       >
-
         <Text
           style={
             styles.questionEmoji
@@ -329,20 +442,17 @@ const handleNext = async () => {
         >
           {question.question_text}
         </Text>
-
       </View>
 
-      {/* =========================
+      {/* =================================
           ANSWERS
-      ========================== */}
+      ================================= */}
 
       <View
         style={styles.answers}
       >
-
         {question.options.map(
           (option) => {
-
             const isSelected =
               selectedAnswer ===
               option;
@@ -378,9 +488,11 @@ const handleNext = async () => {
                     option
                   )
                 }
-                disabled={answered}
+                disabled={
+                  answered ||
+                  savingProgress
+                }
               >
-
                 <Text
                   style={[
                     styles.answerText,
@@ -398,6 +510,8 @@ const handleNext = async () => {
                   {option}
                 </Text>
 
+                {/* Correct icon */}
+
                 {isCorrect && (
                   <Text
                     style={
@@ -408,6 +522,8 @@ const handleNext = async () => {
                   </Text>
                 )}
 
+                {/* Wrong icon */}
+
                 {isWrong && (
                   <Text
                     style={
@@ -417,47 +533,15 @@ const handleNext = async () => {
                     ✕
                   </Text>
                 )}
-
               </TouchableOpacity>
             );
           }
         )}
-
       </View>
 
-      {/* =========================
-          NEXT BUTTON
-      ========================== */}
-
-      {answered &&
-        !showFeedback && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={
-              styles.nextButton
-            }
-            onPress={
-              handleNext
-            }
-          >
-
-            <Text
-              style={
-                styles.nextText
-              }
-            >
-              {currentQuestion ===
-              questions.length - 1
-                ? "Finish 🎉"
-                : "Next →"}
-            </Text>
-
-          </TouchableOpacity>
-        )}
-
-      {/* =========================
+      {/* =================================
           FEEDBACK POPUP
-      ========================== */}
+      ================================= */}
 
       {showFeedback && (
         <View
@@ -465,7 +549,6 @@ const handleNext = async () => {
             styles.feedbackOverlay
           }
         >
-
           <Animated.View
             style={[
               styles.feedbackCard,
@@ -480,8 +563,9 @@ const handleNext = async () => {
               },
             ]}
           >
-
-            {/* Emoji */}
+            {/* =========================
+                EMOJI
+            ========================== */}
 
             <Text
               style={
@@ -495,7 +579,9 @@ const handleNext = async () => {
                 : "😊"}
             </Text>
 
-            {/* Title */}
+            {/* =========================
+                TITLE
+            ========================== */}
 
             <Text
               style={[
@@ -518,7 +604,9 @@ const handleNext = async () => {
                 : "GOOD TRY!"}
             </Text>
 
-            {/* Message */}
+            {/* =========================
+                MESSAGE
+            ========================== */}
 
             <Text
               style={
@@ -532,36 +620,9 @@ const handleNext = async () => {
                 : `The correct answer is ${question.correct_answer}`}
             </Text>
 
-            {/* XP */}
-
-            {lessonComplete && (
-              <View style={styles.finalXpCard}>
-
-                {xpAwarded > 0 ? (
-                  <>
-                    <Text style={styles.finalXpText}>
-                      +{xpAwarded} XP ⭐
-                    </Text>
-
-                    <Text style={styles.finalXpLabel}>
-                      XP Earned!
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.finalXpText}>
-                      ✓ Completed
-                    </Text>
-
-                    <Text style={styles.finalXpLabel}>
-                      You've already earned XP
-                      for this lesson.
-                    </Text>
-                  </>
-                )}
-
-              </View>
-            )}
+            {/* =========================
+                XP FOR CORRECT ANSWER
+            ========================== */}
 
             {!lessonComplete &&
               isCorrect && (
@@ -574,7 +635,60 @@ const handleNext = async () => {
                 </Text>
               )}
 
-            {/* Continue */}
+            {/* =========================
+                FINAL LESSON XP
+            ========================== */}
+
+            {lessonComplete && (
+              <View
+                style={
+                  styles.finalXpCard
+                }
+              >
+                {xpAwarded > 0 ? (
+                  <>
+                    <Text
+                      style={
+                        styles.finalXpText
+                      }
+                    >
+                      +{xpAwarded} XP ⭐
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.finalXpLabel
+                      }
+                    >
+                      XP Earned!
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={
+                        styles.finalXpText
+                      }
+                    >
+                      ✓ Completed
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.finalXpLabel
+                      }
+                    >
+                      You've already earned
+                      XP for this lesson.
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* =========================
+                BUTTON
+            ========================== */}
 
             <TouchableOpacity
               activeOpacity={0.8}
@@ -590,29 +704,37 @@ const handleNext = async () => {
                       : "#FF9800",
                 },
               ]}
-              disabled={savingProgress}
+              disabled={
+                savingProgress
+              }
               onPress={() => {
-                if (savingProgress) {
+                if (
+                  savingProgress
+                ) {
                   return;
                 }
 
-                setShowFeedback(false);
+                // =====================
+                // LESSON COMPLETE
+                // =====================
 
                 if (lessonComplete) {
-                  router.replace({
-                    pathname: "/child/dashboard",
-                    params: {
-                      childId,
-                    },
-                  });
+                  setShowFeedback(
+                    false
+                  );
+
+                  goToDashboard();
 
                   return;
                 }
+
+                // =====================
+                // CONTINUE
+                // =====================
 
                 handleNext();
               }}
             >
-
               <Text
                 style={
                   styles.feedbackButtonText
@@ -624,14 +746,10 @@ const handleNext = async () => {
                   ? "Back to Dashboard 🏠"
                   : "Continue →"}
               </Text>
-
             </TouchableOpacity>
-
           </Animated.View>
-
         </View>
       )}
-
     </View>
   );
 }
@@ -641,28 +759,25 @@ const handleNext = async () => {
 // =====================================
 
 const styles = StyleSheet.create({
+  
 
   container: {
     flex: 1,
     padding: 24,
     paddingTop: 60,
-    backgroundColor:
-      "#F7F8FC",
+    backgroundColor: "#F7F8FC",
   },
-
-  // ==========================
-  // CENTER
-  // ==========================
 
   center: {
     flex: 1,
+
     justifyContent:
       "center",
+
     alignItems:
       "center",
     padding: 24,
-    backgroundColor:
-      "#F7F8FC",
+    backgroundColor: "#F7F8FC",
   },
 
   loadingEmoji: {
@@ -674,6 +789,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     fontSize: 22,
     fontWeight: "800",
+
     color: "#22223B",
   },
 
@@ -702,29 +818,23 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  // ==========================
-  // HEADER
-  // ==========================
 
   header: {
-    flexDirection:
-      "row",
+    flexDirection: "row",
+
     justifyContent:
       "space-between",
-    alignItems:
-      "center",
+    alignItems: "center",
   },
 
   progressText: {
     color: "#777",
     fontSize: 15,
-    fontWeight:
-      "600",
+    fontWeight: "600",
   },
 
   xpBadge: {
-    backgroundColor:
-      "#FFF4C2",
+    backgroundColor: "#FFF4C2",
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -733,54 +843,40 @@ const styles = StyleSheet.create({
   xpBadgeText: {
     color: "#D99000",
     fontSize: 15,
-    fontWeight:
-      "800",
+    fontWeight: "800",
   },
 
-  // ==========================
-  // PROGRESS
-  // ==========================
 
   progressBackground: {
     height: 10,
+
     backgroundColor:
       "#E5E5E5",
     borderRadius: 10,
     marginTop: 15,
-    overflow:
-      "hidden",
+    overflow: "hidden",
   },
 
   progressFill: {
     height: "100%",
-    backgroundColor:
-      "#6C63FF",
+    backgroundColor: "#6C63FF",
     borderRadius: 10,
   },
 
-  // ==========================
-  // QUESTION
-  // ==========================
 
   questionCard: {
-    backgroundColor:
-      "#FFFFFF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 25,
     padding: 30,
     marginTop: 35,
-    alignItems:
-      "center",
-
+    alignItems: "center",
     elevation: 3,
-
     shadowOffset: {
       width: 0,
       height: 2,
     },
 
-    shadowOpacity:
-      0.08,
-
+    shadowOpacity: 0.08,
     shadowRadius: 5,
   },
 
@@ -792,42 +888,26 @@ const styles = StyleSheet.create({
   question: {
     fontSize: 25,
     fontWeight: "800",
-    textAlign:
-      "center",
+    textAlign: "center",
     color: "#22223B",
     lineHeight: 34,
   },
 
-  // ==========================
-  // ANSWERS
-  // ==========================
 
   answers: {
     marginTop: 25,
   },
 
   answerButton: {
-    backgroundColor:
-      "#FFFFFF",
-
+    backgroundColor: "#FFFFFF",
     borderWidth: 2,
-
-    borderColor:
-      "#E5E5E5",
-
+    borderColor: "#E5E5E5",
     borderRadius: 18,
-
     paddingVertical: 17,
-
     paddingHorizontal: 20,
-
     marginBottom: 13,
-
-    alignItems:
-      "center",
-
-    flexDirection:
-      "row",
+    alignItems: "center",
+    flexDirection: "row",
 
     justifyContent:
       "center",
@@ -836,6 +916,7 @@ const styles = StyleSheet.create({
   selectedAnswer: {
     borderColor:
       "#6C63FF",
+
     backgroundColor:
       "#F1EFFF",
   },
@@ -843,21 +924,20 @@ const styles = StyleSheet.create({
   correctAnswer: {
     borderColor:
       "#4CAF50",
+
     backgroundColor:
       "#EAF8EC",
   },
 
   wrongAnswer: {
-    borderColor:
-      "#FF7043",
-    backgroundColor:
-      "#FFF0EB",
+    borderColor:  "#FF7043",
+
+    backgroundColor: "#FFF0EB",
   },
 
   answerText: {
     fontSize: 21,
-    fontWeight:
-      "700",
+    fontWeight: "700",
     color: "#333",
   },
 
@@ -874,118 +954,52 @@ const styles = StyleSheet.create({
   },
 
   answerIcon: {
-    position:
-      "absolute",
+    position: "absolute",
     right: 20,
     fontSize: 24,
-    fontWeight:
-      "900",
+    fontWeight: "900",
   },
-
-  // ==========================
-  // NEXT BUTTON
-  // ==========================
-
-  nextButton: {
-    backgroundColor:
-      "#6C63FF",
-
-    paddingVertical: 17,
-
-    borderRadius: 17,
-
-    alignItems:
-      "center",
-
-    marginTop: 5,
-  },
-
-  nextText: {
-    color: "#FFFFFF",
-    fontSize: 19,
-    fontWeight:
-      "800",
-  },
-
-  // ==========================
-  // BACK BUTTON
-  // ==========================
 
   backButton: {
-    backgroundColor:
-      "#6C63FF",
-
+    backgroundColor: "#6C63FF",
     paddingVertical: 17,
-
     paddingHorizontal: 35,
-
     borderRadius: 17,
-
-    alignItems:
-      "center",
-
+    alignItems: "center",
     marginTop: 25,
   },
 
   buttonText: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontWeight:
-      "800",
+    fontWeight: "800",
   },
 
-  // ==========================
-  // FEEDBACK OVERLAY
-  // ==========================
-
   feedbackOverlay: {
-    position:
-      "absolute",
-
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-
-    backgroundColor:
-      "rgba(20, 20, 40, 0.45)",
-
-    justifyContent:
-      "center",
-
-    alignItems:
-      "center",
-
+    backgroundColor: "rgba(20, 20, 40, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
 
-  // ==========================
-  // FEEDBACK CARD
-  // ==========================
-
   feedbackCard: {
     width: "100%",
-
-    backgroundColor:
-      "#FFFFFF",
-
+    backgroundColor: "#FFFFFF",
     borderRadius: 30,
-
     padding: 30,
-
-    alignItems:
-      "center",
-
+    alignItems: "center",
     elevation: 12,
 
     shadowOffset: {
       width: 0,
       height: 6,
     },
-
-    shadowOpacity:
-      0.3,
-
+    shadowOpacity: 0.3,
     shadowRadius: 12,
   },
 
@@ -996,100 +1010,59 @@ const styles = StyleSheet.create({
 
   feedbackTitle: {
     fontSize: 36,
-    fontWeight:
-      "900",
-    textAlign:
-      "center",
+    fontWeight: "900",
+    textAlign: "center",
   },
 
   feedbackMessage: {
     fontSize: 19,
-    fontWeight:
-      "600",
-
+    fontWeight: "600",
     color: "#555",
-
-    textAlign:
-      "center",
-
+    textAlign: "center",
     marginTop: 12,
-
     lineHeight: 27,
   },
 
-  // ==========================
-  // XP REWARD
-  // ==========================
-
   xpReward: {
     fontSize: 27,
-    fontWeight:
-      "900",
-
+    fontWeight: "900",
     color: "#6C63FF",
-
     marginTop: 18,
   },
 
   finalXpCard: {
-    backgroundColor:
-      "#F1EFFF",
-
+    backgroundColor: "#F1EFFF",
     borderRadius: 20,
-
     paddingVertical: 15,
-
     paddingHorizontal: 35,
-
-    alignItems:
-      "center",
-
+    alignItems: "center",
     marginTop: 20,
   },
 
   finalXpText: {
     fontSize: 30,
-    fontWeight:
-      "900",
-
+    fontWeight: "900",
     color: "#6C63FF",
   },
 
   finalXpLabel: {
     marginTop: 3,
-
     fontSize: 14,
-
-    fontWeight:
-      "600",
-
+    fontWeight: "600",
     color: "#777",
+    textAlign: "center",
   },
-
-  // ==========================
-  // FEEDBACK BUTTON
-  // ==========================
 
   feedbackButton: {
     width: "100%",
-
     paddingVertical: 18,
-
     borderRadius: 17,
-
-    alignItems:
-      "center",
-
+    alignItems: "center",
     marginTop: 25,
   },
-
   feedbackButtonText: {
     color: "#FFFFFF",
-
     fontSize: 19,
-
-    fontWeight:
-      "800",
+    fontWeight: "800",
   },
-
 });
