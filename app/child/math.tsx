@@ -1,25 +1,42 @@
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View} from "react-native";
+import {router, useLocalSearchParams,useFocusEffect, } from "expo-router";
+import { useCallback, useState} from "react";
+import { isLessonCompleted } from "../../services/progressService";
 
-import {
-  router,
-  useLocalSearchParams,
-} from "expo-router";
-
-// 👇 Replace this with the actual ID
-// from your Supabase `lessons` table.
 const COUNTING_LESSON_ID =
   "5fd23917-f005-441a-8aea-860d48695510";
 
 export default function MathScreen() {
-  const { childId } =
-    useLocalSearchParams<{
-      childId: string;
-    }>();
+  const { childId } =  useLocalSearchParams<{ childId: string }>();
+  const [completed, setCompleted] = useState(false);
+
+
+  useFocusEffect(
+    useCallback(() => {
+      checkCompletion();
+    }, [childId])
+  );
+
+const checkCompletion = async () => {
+  try {
+    if (!childId) {
+      return;
+    }
+
+    const completed =
+      await isLessonCompleted(
+        childId,
+        COUNTING_LESSON_ID
+      );
+
+    setCompleted(completed);
+  } catch (error) {
+    console.log(
+      "COMPLETION ERROR:",
+      error
+    );
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -46,6 +63,14 @@ export default function MathScreen() {
           Learn how to count from 1 to 10.
         </Text>
 
+        {completed && (
+          <View style={styles.completedBadge}>
+            <Text style={styles.completedText}>
+              ✓ Completed
+            </Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.button}
           onPress={() =>
@@ -60,7 +85,9 @@ export default function MathScreen() {
           }
         >
           <Text style={styles.buttonText}>
-            Start Lesson
+            {completed
+              ? "Practice Again 🔄"
+              : "Start Lesson"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -129,4 +156,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+  completedBadge: {
+  backgroundColor: "#EAF8EC",
+  paddingVertical: 7,
+  paddingHorizontal: 14,
+  borderRadius: 20,
+  marginTop: 15,
+},
+
+completedText: {
+  color: "#4CAF50",
+  fontSize: 14,
+  fontWeight: "800",
+},
 });

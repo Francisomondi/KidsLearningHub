@@ -8,8 +8,8 @@ export default function ChildDashboard() {
 
   const [totalXP, setTotalXP] = useState(0);
   const [level, setLevel] = useState(1);
-const [levelProgress, setLevelProgress] = useState(0);
-const [xpToNextLevel, setXpToNextLevel] = useState(100);
+  const [levelProgress, setLevelProgress] = useState(0);
+  const [xpToNextLevel, setXpToNextLevel] = useState(100);
 
   useFocusEffect(
   useCallback(() => {

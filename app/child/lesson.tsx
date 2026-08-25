@@ -28,6 +28,7 @@ export default function LessonScreen() {
   const [isCorrect, setIsCorrect] = useState(false);
   const [lessonComplete, setLessonComplete] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
+  const [xpAwarded, setXpAwarded] = useState(0);
 
  
 
@@ -170,50 +171,79 @@ export default function LessonScreen() {
 
 
 const handleNext = async () => {
-  // More questions remaining
-  if (currentQuestion < questions.length - 1) {
-    setCurrentQuestion((previous) => previous + 1);
+  // ---------------------------------
+  // More questions
+  // ---------------------------------
+
+  if (
+    currentQuestion <
+    questions.length - 1
+  ) {
+    setCurrentQuestion(
+      (previous) =>
+        previous + 1
+    );
+
     setSelectedAnswer(null);
+
     setAnswered(false);
+
     return;
   }
 
-  // -----------------------------
-  // LAST QUESTION
-  // -----------------------------
+  // ---------------------------------
+  // Final question
+  // ---------------------------------
 
   if (!childId || !lessonId) {
-    console.log("Missing childId or lessonId");
+    console.log(
+      "Missing childId or lessonId"
+    );
+
     return;
   }
 
   try {
     setSavingProgress(true);
 
-    // Save the current score
-    await saveLessonProgress(
-      childId,
-      lessonId,
-      score
+    const result =
+      await saveLessonProgress(
+        childId,
+        lessonId,
+        score
+      );
+
+      setXpAwarded(
+        result.xpAwarded
+      );
+
+    console.log(
+      "LESSON PROGRESS:",
+      result
     );
 
-    // Show completion screen
     setLessonComplete(true);
+
     setShowFeedback(true);
 
     feedbackScale.setValue(0);
 
-    Animated.spring(feedbackScale, {
-      toValue: 1,
-      friction: 5,
-      tension: 80,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(
+      feedbackScale,
+      {
+        toValue: 1,
+        friction: 5,
+        tension: 80,
+        useNativeDriver: true,
+      }
+    ).start();
+
   } catch (error) {
     console.log(
       "SAVE PROGRESS ERROR:",
       error
     );
+
   } finally {
     setSavingProgress(false);
   }
@@ -505,26 +535,31 @@ const handleNext = async () => {
             {/* XP */}
 
             {lessonComplete && (
-              <View
-                style={
-                  styles.finalXpCard
-                }
-              >
-                <Text
-                  style={
-                    styles.finalXpText
-                  }
-                >
-                  ⭐ {score} XP
-                </Text>
+              <View style={styles.finalXpCard}>
 
-                <Text
-                  style={
-                    styles.finalXpLabel
-                  }
-                >
-                  Total XP Earned
-                </Text>
+                {xpAwarded > 0 ? (
+                  <>
+                    <Text style={styles.finalXpText}>
+                      +{xpAwarded} XP ⭐
+                    </Text>
+
+                    <Text style={styles.finalXpLabel}>
+                      XP Earned!
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.finalXpText}>
+                      ✓ Completed
+                    </Text>
+
+                    <Text style={styles.finalXpLabel}>
+                      You've already earned XP
+                      for this lesson.
+                    </Text>
+                  </>
+                )}
+
               </View>
             )}
 
