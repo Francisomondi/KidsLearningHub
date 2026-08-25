@@ -1,24 +1,8 @@
-import {
-  ActivityIndicator,
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-import {
-  router,
-  useLocalSearchParams,
-} from "expo-router";
-
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router,  useLocalSearchParams} from "expo-router";
+import { useEffect,  useRef,  useState} from "react";
 import { getLessonQuestions } from "../../services/lessonsService";
+import { saveLessonProgress } from "../../services/progressService";
 
 type Question = {
   id: string;
@@ -28,60 +12,30 @@ type Question = {
 };
 
 export default function LessonScreen() {
-  const {
-    childId,
-    lessonId,
-  } = useLocalSearchParams<{
+  const {  childId,  lessonId} = useLocalSearchParams<{
     childId: string;
     lessonId: string;
   }>();
 
-  // -----------------------------
-  // State
-  // -----------------------------
 
-  const [questions, setQuestions] =
-    useState<Question[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [score, setScore] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [lessonComplete, setLessonComplete] = useState(false);
+  const [savingProgress, setSavingProgress] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+ 
 
-  const [currentQuestion, setCurrentQuestion] =
-    useState(0);
+  const feedbackScale = useRef( new Animated.Value(0)).current;
 
-  const [score, setScore] =
-    useState(0);
 
-  const [selectedAnswer, setSelectedAnswer] =
-    useState<string | null>(null);
-
-  const [answered, setAnswered] =
-    useState(false);
-
-  const [showFeedback, setShowFeedback] =
-    useState(false);
-
-  const [isCorrect, setIsCorrect] =
-    useState(false);
-
-  const [lessonComplete, setLessonComplete] =
-    useState(false);
-
-  // -----------------------------
-  // Animation
-  // -----------------------------
-
-  const feedbackScale = useRef(
-    new Animated.Value(0)
-  ).current;
-
-  // -----------------------------
-  // Load questions
-  // -----------------------------
-
-  useEffect(() => {
-    loadQuestions();
-  }, [lessonId]);
+  useEffect(() => { loadQuestions();
+}, [lessonId]);
 
   const loadQuestions = async () => {
     try {
@@ -115,9 +69,7 @@ export default function LessonScreen() {
     }
   };
 
-  // -----------------------------
-  // Loading screen
-  // -----------------------------
+  
 
   if (loading) {
     return (
@@ -142,9 +94,7 @@ export default function LessonScreen() {
     );
   }
 
-  // -----------------------------
-  // No questions
-  // -----------------------------
+
 
   if (questions.length === 0) {
     return (
@@ -174,16 +124,12 @@ export default function LessonScreen() {
     );
   }
 
-  // -----------------------------
-  // Current question
-  // -----------------------------
+ 
 
   const question =
     questions[currentQuestion];
 
-  // -----------------------------
-  // Answer question
-  // -----------------------------
+
 
   const handleAnswer = (
     answer: string
@@ -222,31 +168,45 @@ export default function LessonScreen() {
     ).start();
   };
 
+
+const handleNext = async () => {
+  if (
+    currentQuestion <
+    questions.length - 1
+  ) {
+    setCurrentQuestion(
+      (previous) =>
+        previous + 1
+    );
+
+    setSelectedAnswer(null);
+    setAnswered(false);
+
+    return;
+  }
+
   // -----------------------------
-  // Next question
+  // Lesson completed
   // -----------------------------
 
-  const handleNext = () => {
-    // More questions remaining
-    if (
-      currentQuestion <
-      questions.length - 1
-    ) {
-      setCurrentQuestion(
-        (previous) =>
-          previous + 1
+  const finalScore = score;
+
+  try {
+    setSavingProgress(true);
+
+    if (!childId || !lessonId) {
+      throw new Error(
+        "Child ID or Lesson ID is missing."
       );
-
-      setSelectedAnswer(null);
-
-      setAnswered(false);
-
-      return;
     }
 
-    // Lesson finished
-    setLessonComplete(true);
+    await saveLessonProgress(
+      childId,
+      lessonId,
+      finalScore
+    );
 
+    setLessonComplete(true);
     setShowFeedback(true);
 
     feedbackScale.setValue(0);
@@ -260,11 +220,16 @@ export default function LessonScreen() {
         useNativeDriver: true,
       }
     ).start();
-  };
+  } catch (error) {
+    console.log(
+      "SAVE PROGRESS ERROR:",
+      error
+    );
+  } finally {
+    setSavingProgress(false);
+  }
+};
 
-  // -----------------------------
-  // Render
-  // -----------------------------
 
   return (
     <View style={styles.container}>
@@ -602,18 +567,16 @@ export default function LessonScreen() {
                 },
               ]}
               onPress={() => {
+                if (savingProgress) {
+                  return;
+                }
 
-                setShowFeedback(
-                  false
-                );
+                setShowFeedback(false);
 
-                if (
-                  lessonComplete
-                ) {
+                if (lessonComplete) {
                   router.replace({
                     pathname:
                       "/child/dashboard",
-
                     params: {
                       childId,
                     },
@@ -627,7 +590,9 @@ export default function LessonScreen() {
                   styles.feedbackButtonText
                 }
               >
-                {lessonComplete
+                {savingProgress
+                  ? "Saving... ⏳"
+                  : lessonComplete
                   ? "Back to Dashboard 🏠"
                   : "Continue →"}
               </Text>
