@@ -5,7 +5,6 @@ import {getChildTotalXP,calculateLevel, getLevelProgress,} from "../../services/
 
 export default function ChildDashboard() {
   const { childId, childName } = useLocalSearchParams<{ childId: string; childName: string}>();
-
   const [totalXP, setTotalXP] = useState(0);
   const [level, setLevel] = useState(1);
   const [levelProgress, setLevelProgress] = useState(0);
@@ -151,7 +150,7 @@ export default function ChildDashboard() {
           style={styles.gameCard}
           onPress={() =>
             router.push({
-              pathname: "/child/reading" as any,
+              pathname: "/child/reading",
               params: {
                 childId,
               },

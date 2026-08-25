@@ -1,14 +1,5 @@
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-import {
-  router,
-  useLocalSearchParams,
-} from "expo-router";
+import {StyleSheet,Text,TouchableOpacity,View} from "react-native";
+import {router,useLocalSearchParams} from "expo-router";
 
 export default function ReadingScreen() {
   const { childId } = useLocalSearchParams<{
