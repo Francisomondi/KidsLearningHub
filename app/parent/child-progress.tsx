@@ -1,7 +1,26 @@
-import {ActivityIndicator,ScrollView,StyleSheet,Text,TouchableOpacity,View} from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import {calculateLevel,getChildTotalXP} from "../../services/progressService";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import {
+  router,
+  useLocalSearchParams,
+} from "expo-router";
+
+import {
+  useCallback,
+  useState,
+} from "react";
+
+import {
+  useFocusEffect,
+} from "@react-navigation/native";
+
 import { supabase } from "../../lib/supabase";
 
 type Child = {
@@ -9,52 +28,67 @@ type Child = {
   name: string;
 };
 
-type ProgressRecord = {
-  id: string;
-  lesson_id: string;
-  xp: number;
-  completed: boolean;
-  completed_at: string | null;
-};
-
 type Lesson = {
   id: string;
   title: string;
   description: string | null;
-  xp_reward: number;
+  difficulty: number | null;
+  xp_reward: number | null;
+};
+
+type ProgressRecord = {
+  id: string;
+  lesson_id: string;
+  completed: boolean;
+  completed_at: string | null;
+  lesson: Lesson | null;
 };
 
 export default function ChildProgressScreen() {
-  const { childId, childName } =
-    useLocalSearchParams<{
-      childId: string;
-      childName: string;
-    }>();
-  const [loading, setLoading] = useState(true);
-  const [child, setChild] = useState<Child | null>(null);
-  const [totalXP, setTotalXP] = useState(0);
-  const [progress, setProgress] = useState<ProgressRecord[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const {
+    childId,
+    childName,
+  } = useLocalSearchParams<{
+    childId: string;
+    childName?: string;
+  }>();
 
-  
+  const [loading, setLoading] =
+    useState(true);
+
+  const [child, setChild] =
+    useState<Child | null>(null);
+
+  const [progress, setProgress] =
+    useState<ProgressRecord[]>([]);
+
+  const [totalXP, setTotalXP] =
+    useState(0);
+
   const loadProgress = async () => {
     try {
       setLoading(true);
 
       if (!childId) {
+        console.log(
+          "Child ID is missing."
+        );
+
         return;
       }
 
-      // ==============================
+      // =====================================
       // GET CHILD
-      // ==============================
+      // =====================================
 
-      const { data: childData, error: childError } =
-        await supabase
-          .from("children")
-          .select("id, name")
-          .eq("id", childId)
-          .single();
+      const {
+        data: childData,
+        error: childError,
+      } = await supabase
+        .from("children")
+        .select("id, name")
+        .eq("id", childId)
+        .single();
 
       if (childError) {
         throw childError;
@@ -62,18 +96,9 @@ export default function ChildProgressScreen() {
 
       setChild(childData);
 
-      // ==============================
-      // GET TOTAL XP
-      // ==============================
-
-      const xp =
-        await getChildTotalXP(childId);
-
-      setTotalXP(xp);
-
-      // ==============================
-      // GET PROGRESS
-      // ==============================
+      // =====================================
+      // GET COMPLETED LESSONS
+      // =====================================
 
       const {
         data: progressData,
@@ -81,9 +106,22 @@ export default function ChildProgressScreen() {
       } = await supabase
         .from("child_progress")
         .select(
-          "id, lesson_id, xp, completed, completed_at"
+          `
+          id,
+          lesson_id,
+          completed,
+          completed_at,
+          lessons (
+            id,
+            title,
+            description,
+            difficulty,
+            xp_reward
+          )
+        `
         )
         .eq("child_id", childId)
+        .eq("completed", true)
         .order("completed_at", {
           ascending: false,
         });
@@ -92,32 +130,70 @@ export default function ChildProgressScreen() {
         throw progressError;
       }
 
-      setProgress(progressData || []);
+      // =====================================
+      // NORMALIZE LESSON RELATION
+      // =====================================
 
-      // ==============================
-      // GET LESSONS
-      // ==============================
+      const formattedProgress =
+        (progressData || []).map(
+          (item) => ({
+            id: item.id,
+            lesson_id:
+              item.lesson_id,
+            completed:
+              item.completed,
+            completed_at:
+              item.completed_at,
 
-      const {
-        data: lessonData,
-        error: lessonError,
-      } = await supabase
-        .from("lessons")
-        .select(
-          "id, title, description, xp_reward"
-        )
-        .order("created_at", {
-          ascending: true,
-        });
+            lesson:
+              Array.isArray(
+                item.lessons
+              )
+                ? item.lessons[0] ||
+                  null
+                : item.lessons ||
+                  null,
+          })
+        );
 
-      if (lessonError) {
-        throw lessonError;
-      }
+      setProgress(
+        formattedProgress
+      );
 
-      setLessons(lessonData || []);
+      // =====================================
+      // CALCULATE TOTAL XP
+      //
+      // IMPORTANT:
+      // XP COMES FROM lessons.xp_reward
+      //
+      // NOT child_progress.xp
+      // =====================================
+
+      const calculatedXP =
+        formattedProgress.reduce(
+          (total, item) => {
+            const lessonXP =
+              Number(
+                item.lesson
+                  ?.xp_reward || 0
+              );
+
+            return total + lessonXP;
+          },
+          0
+        );
+
+      setTotalXP(
+        calculatedXP
+      );
+
+      console.log(
+        "TOTAL CHILD XP:",
+        calculatedXP
+      );
     } catch (error) {
       console.log(
-        "CHILD PROGRESS ERROR:",
+        "LOAD CHILD PROGRESS ERROR:",
         error
       );
     } finally {
@@ -125,18 +201,26 @@ export default function ChildProgressScreen() {
     }
   };
 
-  useEffect(() => {
-    loadProgress();
-  }, [childId]);
+  // =====================================
+  // RELOAD WHEN SCREEN OPENS
+  // =====================================
 
-  // ==============================
+  useFocusEffect(
+    useCallback(() => {
+      loadProgress();
+    }, [childId])
+  );
+
+  // =====================================
   // LOADING
-  // ==============================
+  // =====================================
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <Text style={styles.loadingEmoji}>
+        <Text
+          style={styles.loadingEmoji}
+        >
           📊
         </Text>
 
@@ -145,19 +229,29 @@ export default function ChildProgressScreen() {
           color="#6C63FF"
         />
 
-        <Text style={styles.loadingText}>
+        <Text
+          style={styles.loadingTitle}
+        >
           Loading progress...
+        </Text>
+
+        <Text
+          style={styles.loadingText}
+        >
+          Let's see how you're doing! 🚀
         </Text>
       </View>
     );
   }
 
-  // ==============================
-  // LEVEL
-  // ==============================
+  // =====================================
+  // LEVEL SYSTEM
+  // =====================================
 
   const level =
-    calculateLevel(totalXP);
+    Math.floor(
+      totalXP / 100
+    ) + 1;
 
   const currentLevelXP =
     (level - 1) * 100;
@@ -166,384 +260,440 @@ export default function ChildProgressScreen() {
     level * 100;
 
   const xpIntoLevel =
-    totalXP - currentLevelXP;
+    totalXP -
+    currentLevelXP;
 
   const xpNeeded =
-    nextLevelXP - currentLevelXP;
+    nextLevelXP -
+    currentLevelXP;
 
-  const levelProgress =
+  const progressPercentage =
     Math.min(
-      xpIntoLevel / xpNeeded,
-      1
+      Math.max(
+        (xpIntoLevel /
+          xpNeeded) *
+          100,
+        0
+      ),
+      100
     );
 
-  // ==============================
-  // COMPLETED LESSONS
-  // ==============================
-
-  const completedLessons =
-    progress.filter(
-      (item) => item.completed
+  const xpRemaining =
+    Math.max(
+      nextLevelXP -
+        totalXP,
+      0
     );
+
+  const displayName =
+    child?.name ||
+    childName ||
+    "Your Child";
+
+  // =====================================
+  // RENDER
+  // =====================================
 
   return (
     <ScrollView
-      style={styles.container}
       contentContainerStyle={
-        styles.content
+        styles.container
+      }
+      showsVerticalScrollIndicator={
+        false
       }
     >
-      {/* ==========================
-          HEADER
-      =========================== */}
+      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          activeOpacity={0.8}
+          onPress={() =>
+            router.back()
+          }
         >
-          <Text style={styles.backText}>
+          <Text
+            style={styles.backText}
+          >
             ←
           </Text>
         </TouchableOpacity>
 
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>
-            Child Progress
+        <View
+          style={styles.headerText}
+        >
+          <Text
+            style={
+              styles.smallTitle
+            }
+          >
+            Learning Progress
           </Text>
 
-          <Text style={styles.headerSubtitle}>
-            {child?.name || childName}
-          </Text>
-        </View>
-
-        <Text style={styles.headerEmoji}>
-          📚
-        </Text>
-      </View>
-
-      {/* ==========================
-          CHILD CARD
-      =========================== */}
-
-      <View style={styles.childCard}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatar}>
-            🧒
-          </Text>
-        </View>
-
-        <View style={styles.childInfo}>
-          <Text style={styles.childName}>
-            {child?.name || childName}
-          </Text>
-
-          <Text style={styles.levelText}>
-            Level {level} ⭐
+          <Text
+            style={styles.title}
+          >
+            {displayName} 🎓
           </Text>
         </View>
       </View>
 
-      {/* ==========================
-          XP CARD
-      =========================== */}
+      {/* LEVEL CARD */}
 
-      <View style={styles.xpCard}>
-        <View style={styles.xpHeader}>
-          <Text style={styles.xpTitle}>
-            Total XP
+      <View
+        style={styles.levelCard}
+      >
+        <View
+          style={
+            styles.levelCircle
+          }
+        >
+          <Text
+            style={
+              styles.levelNumber
+            }
+          >
+            {level}
           </Text>
 
-          <Text style={styles.xpEmoji}>
-            ⭐
-          </Text>
-        </View>
-
-        <Text style={styles.totalXP}>
-          {totalXP}
-        </Text>
-
-        <Text style={styles.xpLabel}>
-          experience points earned
-        </Text>
-      </View>
-
-      {/* ==========================
-          LEVEL PROGRESS
-      =========================== */}
-
-      <View style={styles.levelCard}>
-        <View style={styles.levelHeader}>
-          <Text style={styles.sectionTitle}>
-            Level {level}
-          </Text>
-
-          <Text style={styles.levelXP}>
-            {xpIntoLevel} / {xpNeeded} XP
+          <Text
+            style={
+              styles.levelLabel
+            }
+          >
+            LEVEL
           </Text>
         </View>
 
         <View
-          style={styles.progressBackground}
+          style={styles.levelInfo}
         >
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${
-                  levelProgress * 100
-                }%`,
-              },
-            ]}
-          />
-        </View>
+          <Text
+            style={
+              styles.levelTitle
+            }
+          >
+            Level {level}
+          </Text>
 
-        <Text style={styles.nextLevelText}>
-          {nextLevelXP - totalXP} XP until
-          Level {level + 1} 🚀
-        </Text>
+          <Text
+            style={styles.xpText}
+          >
+            ⭐ {totalXP} XP
+          </Text>
+
+          <Text
+            style={
+              styles.nextLevelText
+            }
+          >
+            {xpRemaining} XP to
+            Level {level + 1}
+          </Text>
+
+          <View
+            style={
+              styles.levelProgressBackground
+            }
+          >
+            <View
+              style={[
+                styles.levelProgressFill,
+                {
+                  width: `${progressPercentage}%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
       </View>
 
-      {/* ==========================
-          STATISTICS
-      =========================== */}
+      {/* STATISTICS */}
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statEmoji}>
-            🎓
-          </Text>
-
-          <Text style={styles.statNumber}>
-            {completedLessons.length}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Lessons
-          </Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statEmoji}>
+      <View
+        style={styles.statsRow}
+      >
+        <View
+          style={styles.statCard}
+        >
+          <Text
+            style={styles.statEmoji}
+          >
             ⭐
           </Text>
 
-          <Text style={styles.statNumber}>
+          <Text
+            style={styles.statValue}
+          >
             {totalXP}
           </Text>
 
-          <Text style={styles.statLabel}>
-            XP Earned
+          <Text
+            style={styles.statLabel}
+          >
+            Total XP
           </Text>
         </View>
 
-        <View style={styles.statCard}>
-          <Text style={styles.statEmoji}>
-            🏆
+        <View
+          style={styles.statCard}
+        >
+          <Text
+            style={styles.statEmoji}
+          >
+            📚
           </Text>
 
-          <Text style={styles.statNumber}>
-            {level}
+          <Text
+            style={styles.statValue}
+          >
+            {progress.length}
           </Text>
 
-          <Text style={styles.statLabel}>
-            Level
+          <Text
+            style={styles.statLabel}
+          >
+            Completed
           </Text>
         </View>
       </View>
 
-      {/* ==========================
-          LESSON PROGRESS
-      =========================== */}
+      {/* LESSON HISTORY */}
 
-      <Text style={styles.sectionHeading}>
-        Lesson Progress 📚
-      </Text>
-
-      {lessons.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyEmoji}>
-            📚
-          </Text>
-
-          <Text style={styles.emptyTitle}>
-            No lessons yet
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Lessons will appear here as
-            they are added.
-          </Text>
-        </View>
-      ) : (
-        lessons.map((lesson) => {
-          const lessonProgress =
-            progress.find(
-              (item) =>
-                item.lesson_id ===
-                lesson.id
-            );
-
-          const completed =
-            lessonProgress?.completed ===
-            true;
-
-          return (
-            <View
-              key={lesson.id}
-              style={styles.lessonCard}
+      <View
+        style={styles.lessonsCard}
+      >
+        <View
+          style={styles.lessonsHeader}
+        >
+          <View>
+            <Text
+              style={
+                styles.cardTitle
+              }
             >
-              <View
-                style={[
-                  styles.lessonIcon,
-                  completed &&
-                    styles.completedIcon,
-                ]}
-              >
-                <Text style={styles.lessonEmoji}>
-                  {completed
-                    ? "✓"
-                    : "📖"}
-                </Text>
-              </View>
+              📚 Completed Lessons
+            </Text>
 
-              <View
-                style={styles.lessonInfo}
-              >
-                <Text
-                  style={styles.lessonTitle}
-                  numberOfLines={1}
-                >
-                  {lesson.title}
-                </Text>
+            <Text
+              style={
+                styles.cardSubtitle
+              }
+            >
+              {progress.length ===
+              0
+                ? "No lessons completed yet"
+                : `${
+                    progress.length
+                  } lesson${
+                    progress.length ===
+                    1
+                      ? ""
+                      : "s"
+                  } completed`}
+            </Text>
+          </View>
 
-                <Text
-                  style={styles.lessonDescription}
-                  numberOfLines={2}
-                >
-                  {lesson.description ||
-                    "Learning lesson"}
-                </Text>
-
-                <Text
-                  style={styles.lessonXP}
-                >
-                  ⭐{" "}
-                  {lessonProgress?.xp ||
-                    lesson.xp_reward ||
-                    0}{" "}
-                  XP
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.statusBadge,
-                  completed &&
-                    styles.completedBadge,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    completed &&
-                      styles.completedText,
-                  ]}
-                >
-                  {completed
-                    ? "Completed"
-                    : "Not started"}
-                </Text>
-              </View>
-            </View>
-          );
-        })
-      )}
-
-      {/* ==========================
-          RECENT ACTIVITY
-      =========================== */}
-
-      <Text style={styles.sectionHeading}>
-        Recent Activity 🕒
-      </Text>
-
-      {completedLessons.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyEmoji}>
-            🌱
-          </Text>
-
-          <Text style={styles.emptyTitle}>
-            Start learning!
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Completed lessons will appear
-            here.
+          <Text
+            style={styles.trophy}
+          >
+            🏆
           </Text>
         </View>
-      ) : (
-        completedLessons
-          .slice(0, 5)
-          .map((item) => {
-            const lesson =
-              lessons.find(
-                (lessonItem) =>
-                  lessonItem.id ===
-                  item.lesson_id
-              );
 
-            return (
-              <View
-                key={item.id}
-                style={styles.activityCard}
-              >
-                <Text
-                  style={styles.activityEmoji}
-                >
-                  🎉
-                </Text>
+        {/* EMPTY */}
 
-                <View
-                  style={
-                    styles.activityInfo
-                  }
-                >
-                  <Text
+        {progress.length === 0 ? (
+          <View
+            style={styles.emptyBox}
+          >
+            <Text
+              style={
+                styles.emptyEmoji
+              }
+            >
+              🌱
+            </Text>
+
+            <Text
+              style={
+                styles.emptyTitle
+              }
+            >
+              Let's Get Started!
+            </Text>
+
+            <Text
+              style={
+                styles.emptyText
+              }
+            >
+              {displayName} hasn't
+              completed any lessons
+              yet.
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={styles.lessonList}
+          >
+            {progress.map(
+              (item, index) => {
+                const lesson =
+                  item.lesson;
+
+                const lessonXP =
+                  Number(
+                    lesson?.xp_reward ||
+                      0
+                  );
+
+                return (
+                  <View
+                    key={item.id}
                     style={
-                      styles.activityTitle
+                      styles.lessonItem
                     }
                   >
-                    {lesson?.title ||
-                      "Lesson completed"}
-                  </Text>
+                    {/* NUMBER */}
 
-                  <Text
-                    style={
-                      styles.activityDate
-                    }
-                  >
-                    Lesson completed
-                  </Text>
-                </View>
+                    <View
+                      style={
+                        styles.lessonNumber
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.lessonNumberText
+                        }
+                      >
+                        {index + 1}
+                      </Text>
+                    </View>
 
-                <Text
-                  style={styles.activityXP}
-                >
-                  +{item.xp} XP
-                </Text>
-              </View>
-            );
-          })
-      )}
+                    {/* DETAILS */}
 
-      {/* ==========================
-          BACK BUTTON
-      =========================== */}
+                    <View
+                      style={
+                        styles.lessonDetails
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.lessonTitle
+                        }
+                        numberOfLines={2}
+                      >
+                        {lesson?.title ||
+                          "Completed Lesson"}
+                      </Text>
+
+                      {lesson?.description && (
+                        <Text
+                          style={
+                            styles.lessonDescription
+                          }
+                          numberOfLines={2}
+                        >
+                          {
+                            lesson.description
+                          }
+                        </Text>
+                      )}
+
+                      <View
+                        style={
+                          styles.lessonMeta
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.completedText
+                          }
+                        >
+                          ✓ Completed
+                        </Text>
+
+                        {item.completed_at && (
+                          <Text
+                            style={
+                              styles.dateText
+                            }
+                          >
+                            {new Date(
+                              item.completed_at
+                            ).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* XP */}
+
+                    <View
+                      style={
+                        styles.lessonXP
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.lessonXPText
+                        }
+                      >
+                        +{lessonXP}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.lessonXPLabel
+                        }
+                      >
+                        XP
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* CHILD DASHBOARD */}
 
       <TouchableOpacity
-        style={styles.dashboardButton}
+        style={
+          styles.learningButton
+        }
+        activeOpacity={0.8}
+        onPress={() =>
+          router.push({
+            pathname:
+              "/child/dashboard",
+            params: {
+              childId,
+              childName:
+                displayName,
+            },
+          })
+        }
+      >
+        <Text
+          style={
+            styles.learningButtonText
+          }
+        >
+          📚 View Child Dashboard
+        </Text>
+      </TouchableOpacity>
+
+      {/* PARENT DASHBOARD */}
+
+      <TouchableOpacity
+        style={
+          styles.parentButton
+        }
         activeOpacity={0.8}
         onPress={() =>
           router.back()
@@ -551,33 +701,37 @@ export default function ChildProgressScreen() {
       >
         <Text
           style={
-            styles.dashboardButtonText
+            styles.parentButtonText
           }
         >
-          ← Back to Dashboard
+          ← Parent Dashboard
         </Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
+// =====================================
+// STYLES
+// =====================================
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
+    padding: 24,
+    paddingTop: 65,
     backgroundColor: "#F7F8FC",
-  },
-
-  content: {
-    padding: 20,
-    paddingTop: 55,
-    paddingBottom: 40,
   },
 
   center: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F7F8FC",
+    justifyContent:
+      "center",
+    alignItems:
+      "center",
+    padding: 24,
+    backgroundColor:
+      "#F7F8FC",
   },
 
   loadingEmoji: {
@@ -585,18 +739,22 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
-  loadingText: {
+  loadingTitle: {
     marginTop: 15,
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#555",
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#22223B",
+  },
+
+  loadingText: {
+    marginTop: 7,
+    color: "#777",
+    fontSize: 15,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 25,
   },
 
   backButton: {
@@ -604,346 +762,316 @@ const styles = StyleSheet.create({
     height: 45,
     borderRadius: 15,
     backgroundColor: "#FFFFFF",
+    justifyContent:
+      "center",
     alignItems: "center",
-    justifyContent: "center",
-    elevation: 2,
+    marginRight: 12,
   },
 
   backText: {
-    fontSize: 28,
-    color: "#22223B",
-    fontWeight: "700",
-  },
-
-  headerCenter: {
-    flex: 1,
-    marginLeft: 15,
-  },
-
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#22223B",
-  },
-
-  headerSubtitle: {
-    marginTop: 3,
-    fontSize: 15,
-    color: "#777",
-    fontWeight: "600",
-  },
-
-  headerEmoji: {
-    fontSize: 38,
-  },
-
-  childCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 25,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 3,
-  },
-
-  avatarCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#F1EFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  avatar: {
-    fontSize: 45,
-  },
-
-  childInfo: {
-    marginLeft: 15,
-  },
-
-  childName: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#22223B",
-  },
-
-  levelText: {
-    marginTop: 5,
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 27,
+    fontWeight: "800",
     color: "#6C63FF",
   },
 
-  xpCard: {
-    marginTop: 18,
-    backgroundColor: "#6C63FF",
-    borderRadius: 25,
-    padding: 25,
+  headerText: {
+    flex: 1,
   },
 
-  xpHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  xpTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-
-  xpEmoji: {
-    fontSize: 28,
-  },
-
-  totalXP: {
-    marginTop: 5,
-    color: "#FFFFFF",
-    fontSize: 45,
-    fontWeight: "900",
-  },
-
-  xpLabel: {
-    color: "#E9E7FF",
+  smallTitle: {
+    color: "#777",
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  title: {
+    color: "#22223B",
+    fontSize: 27,
+    fontWeight: "900",
+    marginTop: 3,
   },
 
   levelCard: {
-    marginTop: 18,
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
+    borderRadius: 25,
     padding: 22,
-  },
-
-  levelHeader: {
+    marginTop: 25,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+
+    elevation: 4,
+
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+
+    shadowOpacity: 0.1,
+    shadowRadius: 7,
   },
 
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#22223B",
-  },
-
-  levelXP: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#6C63FF",
-  },
-
-  progressBackground: {
-    height: 14,
-    backgroundColor: "#E8E8EE",
-    borderRadius: 20,
-    overflow: "hidden",
-    marginTop: 15,
-  },
-
-  progressFill: {
-    height: "100%",
+  levelCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: "#6C63FF",
-    borderRadius: 20,
-  },
-
-  nextLevelText: {
-    marginTop: 10,
-    color: "#777",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 18,
-  },
-
-  statCard: {
-    width: "31%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingVertical: 18,
+    justifyContent:
+      "center",
     alignItems: "center",
+    marginRight: 18,
   },
 
-  statEmoji: {
-    fontSize: 27,
+  levelNumber: {
+    color: "#FFFFFF",
+    fontSize: 34,
+    fontWeight: "900",
   },
 
-  statNumber: {
-    marginTop: 7,
+  levelLabel: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  levelInfo: {
+    flex: 1,
+  },
+
+  levelTitle: {
     fontSize: 22,
     fontWeight: "900",
     color: "#22223B",
   },
 
-  statLabel: {
-    marginTop: 3,
-    fontSize: 12,
-    color: "#777",
-    fontWeight: "600",
+  xpText: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#6C63FF",
+    marginTop: 4,
   },
 
-  sectionHeading: {
-    marginTop: 28,
-    marginBottom: 12,
+  nextLevelText: {
+    color: "#777",
+    fontSize: 13,
+    marginTop: 5,
+  },
+
+  levelProgressBackground: {
+    height: 9,
+    backgroundColor: "#E7E7E7",
+    borderRadius: 10,
+    overflow: "hidden",
+    marginTop: 10,
+  },
+
+  levelProgressFill: {
+    height: "100%",
+    backgroundColor: "#6C63FF",
+    borderRadius: 10,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    gap: 15,
+    marginTop: 18,
+  },
+
+  statCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    elevation: 2,
+  },
+
+  statEmoji: {
+    fontSize: 32,
+  },
+
+  statValue: {
+    fontSize: 27,
+    fontWeight: "900",
+    color: "#22223B",
+    marginTop: 5,
+  },
+
+  statLabel: {
+    color: "#777",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  lessonsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 23,
+    padding: 20,
+    marginTop: 18,
+    elevation: 2,
+  },
+
+  lessonsHeader: {
+    flexDirection: "row",
+    justifyContent:
+      "space-between",
+    alignItems: "center",
+  },
+
+  cardTitle: {
     fontSize: 21,
     fontWeight: "900",
     color: "#22223B",
   },
 
-  lessonCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
+  cardSubtitle: {
+    color: "#777",
+    fontSize: 14,
+    marginTop: 4,
+  },
+
+  trophy: {
+    fontSize: 38,
+  },
+
+  emptyBox: {
+    alignItems: "center",
+    paddingVertical: 30,
+  },
+
+  emptyEmoji: {
+    fontSize: 60,
+  },
+
+  emptyTitle: {
+    fontSize: 21,
+    fontWeight: "900",
+    color: "#22223B",
+    marginTop: 10,
+  },
+
+  emptyText: {
+    color: "#777",
+    textAlign: "center",
+    marginTop: 7,
+    lineHeight: 21,
+  },
+
+  lessonList: {
+    marginTop: 18,
+  },
+
+  lessonItem: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F8F8FC",
+    borderRadius: 18,
+    padding: 13,
+    marginBottom: 12,
   },
 
-  lessonIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: "#F1EFFF",
+  lessonNumber: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#6C63FF",
+    justifyContent:
+      "center",
     alignItems: "center",
-    justifyContent: "center",
+    marginRight: 12,
   },
 
-  completedIcon: {
-    backgroundColor: "#EAF8EC",
-  },
-
-  lessonEmoji: {
-    fontSize: 25,
-    color: "#4CAF50",
+  lessonNumberText: {
+    color: "#FFFFFF",
+    fontSize: 16,
     fontWeight: "900",
   },
 
-  lessonInfo: {
+  lessonDetails: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
   },
 
   lessonTitle: {
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#22223B",
   },
 
   lessonDescription: {
+    color: "#777",
+    fontSize: 12,
+    lineHeight: 17,
     marginTop: 3,
-    fontSize: 12,
-    color: "#888",
   },
 
-  lessonXP: {
-    marginTop: 5,
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#6C63FF",
-  },
-
-  statusBadge: {
-    backgroundColor: "#F2F2F2",
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-
-  completedBadge: {
-    backgroundColor: "#EAF8EC",
-  },
-
-  statusText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#888",
+  lessonMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
   },
 
   completedText: {
     color: "#4CAF50",
-  },
-
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 30,
-    alignItems: "center",
-  },
-
-  emptyEmoji: {
-    fontSize: 50,
-  },
-
-  emptyTitle: {
-    marginTop: 10,
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#22223B",
-  },
-
-  emptyText: {
-    marginTop: 7,
-    textAlign: "center",
-    color: "#777",
-    lineHeight: 21,
-  },
-
-  activityCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  activityEmoji: {
-    fontSize: 30,
-  },
-
-  activityInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  activityTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#22223B",
-  },
-
-  activityDate: {
-    marginTop: 3,
     fontSize: 12,
-    color: "#888",
+    fontWeight: "800",
   },
 
-  activityXP: {
-    fontSize: 15,
+  dateText: {
+    color: "#999",
+    fontSize: 11,
+    marginLeft: 10,
+  },
+
+  lessonXP: {
+    backgroundColor: "#FFF4C2",
+    borderRadius: 14,
+    minWidth: 52,
+    paddingVertical: 8,
+    paddingHorizontal: 7,
+    alignItems: "center",
+    marginLeft: 8,
+  },
+
+  lessonXPText: {
+    color: "#D99000",
+    fontSize: 16,
     fontWeight: "900",
-    color: "#4CAF50",
   },
 
-  dashboardButton: {
+  lessonXPLabel: {
+    color: "#D99000",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  learningButton: {
     backgroundColor: "#6C63FF",
     paddingVertical: 17,
     borderRadius: 17,
     alignItems: "center",
-    marginTop: 25,
+    marginTop: 20,
   },
 
-  dashboardButtonText: {
+  learningButtonText: {
     color: "#FFFFFF",
     fontSize: 17,
+    fontWeight: "900",
+  },
+
+  parentButton: {
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 16,
+    borderRadius: 17,
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#E5E5E5",
+  },
+
+  parentButtonText: {
+    color: "#555",
+    fontSize: 16,
     fontWeight: "800",
   },
 });
