@@ -259,26 +259,13 @@ export default function LessonScreen() {
 
     try {
       setSavingProgress(true);
-
-      // IMPORTANT:
-      // score state may not yet contain
-      // the final question's +10 XP.
-      //
-      // Therefore calculate the final
-      // score manually.
-
-      const finalCorrectAnswers =
-        score / 10 +
-        (selectedAnswer ===
-        question.correct_answer
-          ? 1
-          : 0);
-
-      const finalScore = Math.round(
-        (finalCorrectAnswers /
-          questions.length) *
-          lessonXpReward
-      );
+   
+      const finalScore =
+      score +
+      (selectedAnswer ===
+      question.correct_answer
+        ? 10
+        : 0);
 
       console.log("FINAL SCORE:",finalScore);
 

@@ -1,9 +1,8 @@
 import { supabase } from "../lib/supabase";
 
-
 // =====================================
 // SAVE LESSON PROGRESS
-// Awards XP only the FIRST time
+// Awards XP ONLY the first time
 // =====================================
 
 export async function saveLessonProgress(
@@ -11,25 +10,44 @@ export async function saveLessonProgress(
   lessonId: string,
   xp: number
 ) {
-  // Check whether this lesson
-  // has already been completed
-  const { data: existing, error: findError } =
-    await supabase
-      .from("child_progress")
-      .select("*")
-      .eq("child_id", childId)
-      .eq("lesson_id", lessonId)
-      .maybeSingle();
+  if (!childId) {
+    throw new Error("Child ID is missing.");
+  }
+
+  if (!lessonId) {
+    throw new Error("Lesson ID is missing.");
+  }
+
+  // Make sure XP is always a valid number
+  const safeXP = Math.max(
+    0,
+    Math.floor(Number(xp) || 0)
+  );
+
+  // =====================================
+  // CHECK EXISTING PROGRESS
+  // =====================================
+
+  const {
+    data: existing,
+    error: findError,
+  } = await supabase
+    .from("child_progress")
+    .select("*")
+    .eq("child_id", childId)
+    .eq("lesson_id", lessonId)
+    .maybeSingle();
 
   if (findError) {
     throw findError;
   }
 
-  // ---------------------------------
-  // Already completed
-  // ---------------------------------
+  // =====================================
+  // ALREADY COMPLETED
+  // DO NOT AWARD XP AGAIN
+  // =====================================
 
-  if (existing?.completed) {
+  if (existing?.completed === true) {
     return {
       data: existing,
       alreadyCompleted: true,
@@ -37,25 +55,27 @@ export async function saveLessonProgress(
     };
   }
 
-  // ---------------------------------
-  // Existing record but not completed
-  // ---------------------------------
+  // =====================================
+  // EXISTING RECORD BUT NOT COMPLETED
+  // =====================================
 
   if (existing) {
-    const { data, error } =
-      await supabase
-        .from("child_progress")
-        .update({
-          xp,
-          completed: true,
-          completed_at:
-            new Date().toISOString(),
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq("id", existing.id)
-        .select()
-        .single();
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("child_progress")
+      .update({
+        xp: safeXP,
+        completed: true,
+        completed_at:
+          new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
 
     if (error) {
       throw error;
@@ -64,27 +84,29 @@ export async function saveLessonProgress(
     return {
       data,
       alreadyCompleted: false,
-      xpAwarded: xp,
+      xpAwarded: safeXP,
     };
   }
 
-  // ---------------------------------
-  // First time completing lesson
-  // ---------------------------------
+  // =====================================
+  // FIRST TIME COMPLETING LESSON
+  // =====================================
 
-  const { data, error } =
-    await supabase
-      .from("child_progress")
-      .insert({
-        child_id: childId,
-        lesson_id: lessonId,
-        xp,
-        completed: true,
-        completed_at:
-          new Date().toISOString(),
-      })
-      .select()
-      .single();
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("child_progress")
+    .insert({
+      child_id: childId,
+      lesson_id: lessonId,
+      xp: safeXP,
+      completed: true,
+      completed_at:
+        new Date().toISOString(),
+    })
+    .select()
+    .single();
 
   if (error) {
     throw error;
@@ -93,10 +115,9 @@ export async function saveLessonProgress(
   return {
     data,
     alreadyCompleted: false,
-    xpAwarded: xp,
+    xpAwarded: safeXP,
   };
 }
-
 
 // =====================================
 // GET CHILD TOTAL XP
@@ -105,27 +126,36 @@ export async function saveLessonProgress(
 export async function getChildTotalXP(
   childId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("child_progress")
-      .select("xp")
-      .eq("child_id", childId)
-      .eq("completed", true);
+  if (!childId) {
+    return 0;
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("child_progress")
+    .select("xp_earned")
+    .eq("child_id", childId)
+    .eq("completed", true);
 
   if (error) {
     throw error;
   }
 
   const totalXP =
-    data?.reduce(
-      (total, item) =>
-        total + (item.xp || 0),
+    (data || []).reduce(
+      (total, item) => {
+        const itemXP =
+          Number(item.xp_earned) || 0;
+
+        return total + itemXP;
+      },
       0
-    ) || 0;
+    );
 
   return totalXP;
 }
-
 
 // =====================================
 // CHECK IF LESSON IS COMPLETED
@@ -135,13 +165,19 @@ export async function isLessonCompleted(
   childId: string,
   lessonId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("child_progress")
-      .select("completed")
-      .eq("child_id", childId)
-      .eq("lesson_id", lessonId)
-      .maybeSingle();
+  if (!childId || !lessonId) {
+    return false;
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("child_progress")
+    .select("completed")
+    .eq("child_id", childId)
+    .eq("lesson_id", lessonId)
+    .maybeSingle();
 
   if (error) {
     throw error;
@@ -150,7 +186,6 @@ export async function isLessonCompleted(
   return data?.completed === true;
 }
 
-
 // =====================================
 // GET LEVEL
 // =====================================
@@ -158,9 +193,11 @@ export async function isLessonCompleted(
 export function calculateLevel(
   xp: number
 ) {
-  return Math.floor(xp / 100) + 1;
-}
+  const safeXP =
+    Math.max(0, Number(xp) || 0);
 
+  return Math.floor(safeXP / 100) + 1;
+}
 
 // =====================================
 // GET LEVEL PROGRESS
@@ -169,8 +206,11 @@ export function calculateLevel(
 export function getLevelProgress(
   xp: number
 ) {
+  const safeXP =
+    Math.max(0, Number(xp) || 0);
+
   const level =
-    calculateLevel(xp);
+    calculateLevel(safeXP);
 
   const currentLevelXP =
     (level - 1) * 100;
@@ -179,13 +219,19 @@ export function getLevelProgress(
     level * 100;
 
   const xpIntoLevel =
-    xp - currentLevelXP;
+    safeXP - currentLevelXP;
 
   const xpNeeded =
     nextLevelXP - currentLevelXP;
 
   const progress =
-    xpIntoLevel / xpNeeded;
+    Math.min(
+      1,
+      Math.max(
+        0,
+        xpIntoLevel / xpNeeded
+      )
+    );
 
   return {
     level,
