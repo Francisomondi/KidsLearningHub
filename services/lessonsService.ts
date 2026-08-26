@@ -17,3 +17,28 @@ export async function getLessonQuestions(
 
   return data;
 }
+
+export async function getLesson(
+  lessonId: string
+) {
+  const { data, error } =
+    await supabase
+      .from("lessons")
+      .select(`
+        id,
+        category_id,
+        title,
+        description,
+        difficulty,
+        xp_reward,
+        created_at
+      `)
+      .eq("id", lessonId)
+      .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}

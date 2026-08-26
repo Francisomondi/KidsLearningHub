@@ -1,8 +1,8 @@
 import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View} from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { getLessonQuestions } from "../../services/lessonsService";
-import { saveLessonProgress } from "../../services/progressService";
+import {  getLesson, getLessonQuestions } from "../../services/lessonsService";
+import {  saveLessonProgress } from "../../services/progressService";
 
 type Question = {
   id: string;
@@ -27,6 +27,7 @@ export default function LessonScreen() {
   // =====================================
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [lessonXpReward, setLessonXpReward] = useState(50);
   const [loading, setLoading] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
@@ -69,12 +70,13 @@ export default function LessonScreen() {
         return;
       }
 
-      const data =
-        await getLessonQuestions(
-          lessonId
-        );
+    const lesson = await getLesson(lessonId);
+    const data = await getLessonQuestions( lessonId );
 
-      setQuestions(data || []);
+    setLessonXpReward( lesson?.xp_reward ?? 50 );
+
+    setQuestions(data || []);
+
     } catch (error) {
       console.log(
         "LESSON ERROR:",
@@ -265,17 +267,20 @@ export default function LessonScreen() {
       // Therefore calculate the final
       // score manually.
 
-      const finalScore =
-        score +
+      const finalCorrectAnswers =
+        score / 10 +
         (selectedAnswer ===
         question.correct_answer
-          ? 10
+          ? 1
           : 0);
 
-      console.log(
-        "FINAL SCORE:",
-        finalScore
+      const finalScore = Math.round(
+        (finalCorrectAnswers /
+          questions.length) *
+          lessonXpReward
       );
+
+      console.log("FINAL SCORE:",finalScore);
 
       // =================================
       // SAVE TO SUPABASE
