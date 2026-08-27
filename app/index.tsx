@@ -1,16 +1,5 @@
-import {
-  ImageBackground,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Dimensions,
-  StatusBar,
-} from "react-native";
-
+import {ImageBackground,SafeAreaView,StyleSheet,Text,TouchableOpacity,View,Dimensions,StatusBar} from "react-native";
 import { router } from "expo-router";
-
 const { width, height } = Dimensions.get("window");
 
 export default function HomeScreen() {
@@ -26,7 +15,7 @@ export default function HomeScreen() {
       ====================================== */}
 
       <ImageBackground
-        source={require("../assets/images/home-background.png")}
+        source={require("../assets/images/home-background-2.png")}
         style={styles.background}
         resizeMode="cover"
       >
@@ -75,9 +64,7 @@ export default function HomeScreen() {
           ================================== */}
 
           <View style={styles.hero}>
-            <Text style={styles.heroEmoji}>
-              🌈
-            </Text>
+           
 
             <Text style={styles.heroTitle}>
               Ready to Learn?

@@ -2,13 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import {Animated,StyleSheet,Text,TouchableOpacity,View} from "react-native";
 
 const ALPHABET_LESSON_ID =
   "bcb6000d-f563-4f0d-a49c-e0de07109888";

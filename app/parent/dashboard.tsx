@@ -1,18 +1,7 @@
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
+import {ActivityIndicator,ImageBackground,ScrollView,StyleSheet,Text,TouchableOpacity,View} from "react-native";
 import { router } from "expo-router";
-
 import { useCallback, useState } from "react";
-
 import { useFocusEffect } from "@react-navigation/native";
-
 import { supabase } from "../../lib/supabase";
 
 type Child = {
@@ -85,205 +74,244 @@ export default function ParentDashboard() {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
+    <ImageBackground
+      source={require("../../assets/images/home-background-2.png")}
+      style={styles.background}
+      resizeMode="cover"
     >
-      {/* HEADER */}
-
-      <Text style={styles.greeting}>
-        Good evening 👋
-      </Text>
-
-      <Text style={styles.title}>
-        Parent Dashboard
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Track your children's learning journey 🌟
-      </Text>
-
-      {/* CHILDREN CARD */}
-
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.cardTitle}>
-              Your Children
-            </Text>
-
-            <Text style={styles.cardSubtitle}>
-              {children.length === 0
-                ? "No children added yet"
-                : `${children.length} ${
-                    children.length === 1
-                      ? "child"
-                      : "children"
-                  }`}
-            </Text>
-          </View>
-
-          <Text style={styles.cardEmoji}>
-            👨‍👩‍👧‍👦
-          </Text>
-        </View>
-
-        {/* LOADING */}
-
-        {loading ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator
-              size="large"
-              color="#6C63FF"
-            />
-
-            <Text style={styles.loaderText}>
-              Loading children...
-            </Text>
-          </View>
-        ) : children.length === 0 ? (
-          /* EMPTY */
-
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>
-              🧒
-            </Text>
-
-            <Text style={styles.emptyTitle}>
-              No children yet
-            </Text>
-
-            <Text style={styles.emptyText}>
-              Add your child to start their
-              learning journey.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.button}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push("/parent/add-child")
-              }
-            >
-              <Text style={styles.buttonText}>
-                + Add Child
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* CHILDREN */
-
-          <>
-            {children.map((child) => (
-              <View
-                key={child.id}
-                style={styles.childCard}
-              >
-                {/* CHILD INFO */}
-
-                <View style={styles.childTop}>
-                  <View style={styles.avatarContainer}>
-                    <Text style={styles.avatar}>
-                      🧒
-                    </Text>
-                  </View>
-
-                  <View style={styles.childInfo}>
-                    <Text style={styles.childName}>
-                      {child.name}
-                    </Text>
-
-                    <Text style={styles.childText}>
-                      Ready to learn and grow! 🚀
-                    </Text>
-                  </View>
-                </View>
-
-                {/* ACTIONS */}
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.learningButton}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      openChildDashboard(child)
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.learningButtonText
-                      }
-                    >
-                      📚 Learning
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.progressButton}
-                    activeOpacity={0.8}
-                    onPress={() =>
-                      openChildProgress(child)
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.progressButtonText
-                      }
-                    >
-                      📊 Progress
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-
-            {/* ADD CHILD */}
-
-            <TouchableOpacity
-              style={styles.addAnotherButton}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push("/parent/add-child")
-              }
-            >
-              <Text style={styles.addAnotherText}>
-                + Add Another Child
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* LOGOUT */}
-
-        <TouchableOpacity
-          style={styles.logoutButton}
-          activeOpacity={0.8}
-          onPress={async () => {
-            await supabase.auth.signOut();
-
-            router.replace("/auth/login");
-          }}
+      {/* Soft overlay so text/cards remain readable */}
+      <View style={styles.overlay}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.logoutText}>
-            Logout
+          {/* =========================
+              HEADER
+          ========================== */}
+
+          <Text style={styles.greeting}>
+            Good evening 👋
           </Text>
-        </TouchableOpacity>
+
+          <Text style={styles.title}>
+            Parent Dashboard
+          </Text>
+
+          <Text style={styles.subtitle}>
+            Track your children's learning journey 🌟
+          </Text>
+
+          {/* =========================
+              CHILDREN CARD
+          ========================== */}
+
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.cardTitle}>
+                  Your Children
+                </Text>
+
+                <Text style={styles.cardSubtitle}>
+                  {children.length === 0
+                    ? "No children added yet"
+                    : `${children.length} ${
+                        children.length === 1
+                          ? "child"
+                          : "children"
+                      }`}
+                </Text>
+              </View>
+
+              <Text style={styles.cardEmoji}>
+                👨‍👩‍👧‍👦
+              </Text>
+            </View>
+
+            {/* =========================
+                LOADING
+            ========================== */}
+
+            {loading ? (
+              <View style={styles.loaderContainer}>
+                <ActivityIndicator
+                  size="large"
+                  color="#6C63FF"
+                />
+
+                <Text style={styles.loaderText}>
+                  Loading children...
+                </Text>
+              </View>
+            ) : children.length === 0 ? (
+              /* =========================
+                 EMPTY STATE
+              ========================== */
+
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>
+                  🧒
+                </Text>
+
+                <Text style={styles.emptyTitle}>
+                  No children yet
+                </Text>
+
+                <Text style={styles.emptyText}>
+                  Add your child to start their
+                  learning journey.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.button}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push("/parent/add-child")
+                  }
+                >
+                  <Text style={styles.buttonText}>
+                    + Add Child
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* =========================
+                 CHILDREN
+              ========================== */
+
+              <>
+                {children.map((child) => (
+                  <View
+                    key={child.id}
+                    style={styles.childCard}
+                  >
+                    {/* CHILD INFO */}
+
+                    <View style={styles.childTop}>
+                      <View style={styles.avatarContainer}>
+                        <Text style={styles.avatar}>
+                          🧒
+                        </Text>
+                      </View>
+
+                      <View style={styles.childInfo}>
+                        <Text style={styles.childName}>
+                          {child.name}
+                        </Text>
+
+                        <Text style={styles.childText}>
+                          Ready to learn and grow! 🚀
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* ACTIONS */}
+
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={styles.learningButton}
+                        activeOpacity={0.8}
+                        onPress={() =>
+                          openChildDashboard(child)
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.learningButtonText
+                          }
+                        >
+                          📚 Learning
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.progressButton}
+                        activeOpacity={0.8}
+                        onPress={() =>
+                          openChildProgress(child)
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.progressButtonText
+                          }
+                        >
+                          📊 Progress
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {/* =========================
+                    ADD ANOTHER CHILD
+                ========================== */}
+
+                <TouchableOpacity
+                  style={styles.addAnotherButton}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push("/parent/add-child")
+                  }
+                >
+                  <Text style={styles.addAnotherText}>
+                    + Add Another Child
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* =========================
+                LOGOUT
+            ========================== */}
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              activeOpacity={0.8}
+              onPress={async () => {
+                await supabase.auth.signOut();
+
+                router.replace("/auth/login");
+              }}
+            >
+              <Text style={styles.logoutText}>
+                Logout
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
-    </ScrollView>
+    </ImageBackground>
   );
 }
 
+// =====================================
+// STYLES
+// =====================================
+
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.68)",
+  },
+
   container: {
     flexGrow: 1,
     padding: 24,
     paddingTop: 70,
-    backgroundColor: "#F7F8FC",
+    paddingBottom: 40,
   },
 
   greeting: {
-    color: "#777",
+    color: "#555",
     fontSize: 16,
+    fontWeight: "600",
   },
 
   title: {
@@ -294,27 +322,32 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    color: "#777",
+    color: "#555",
     fontSize: 15,
     marginTop: 5,
+    fontWeight: "600",
   },
 
+  // =====================================
+  // MAIN CARD
+  // =====================================
+
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255,255,255,0.94)",
     padding: 20,
     borderRadius: 24,
     marginTop: 30,
 
-    elevation: 4,
+    elevation: 5,
 
     shadowOffset: {
       width: 0,
       height: 3,
     },
 
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
 
-    shadowRadius: 7,
+    shadowRadius: 8,
   },
 
   cardHeader: {
@@ -339,6 +372,10 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
 
+  // =====================================
+  // LOADING
+  // =====================================
+
   loaderContainer: {
     alignItems: "center",
     paddingVertical: 40,
@@ -349,6 +386,10 @@ const styles = StyleSheet.create({
     color: "#777",
     fontSize: 15,
   },
+
+  // =====================================
+  // EMPTY
+  // =====================================
 
   emptyContainer: {
     alignItems: "center",
@@ -387,11 +428,18 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
+  // =====================================
+  // CHILD CARD
+  // =====================================
+
   childCard: {
-    backgroundColor: "#F8F8FC",
+    backgroundColor: "rgba(248,248,252,0.96)",
     padding: 15,
     borderRadius: 18,
     marginTop: 15,
+
+    borderWidth: 1,
+    borderColor: "rgba(230,230,240,0.8)",
   },
 
   childTop: {
@@ -429,6 +477,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
+  // =====================================
+  // ACTIONS
+  // =====================================
+
   actionRow: {
     flexDirection: "row",
     gap: 10,
@@ -465,6 +517,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
+  // =====================================
+  // ADD CHILD
+  // =====================================
+
   addAnotherButton: {
     backgroundColor: "#F1EFFF",
     paddingVertical: 15,
@@ -478,6 +534,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
   },
+
+  // =====================================
+  // LOGOUT
+  // =====================================
 
   logoutButton: {
     backgroundColor: "#FF6B6B",
